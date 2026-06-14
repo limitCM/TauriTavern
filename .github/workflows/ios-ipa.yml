@@ -146,19 +146,19 @@ jobs:
           tauri_status=$?
           set -e
 
-          mapfile -t app_candidates < <(
-            find \
-              src-tauri/gen/apple/build \
-              "$HOME/Library/Developer/Xcode/DerivedData" \
-              -type d \
-              -name '*.app' \
-              ! -path '*iphonesimulator*' \
-              -print \
-              2>/dev/null || true
-          )
+          app_candidates_file="$RUNNER_TEMP/ios-app-candidates.txt"
+          find \
+            src-tauri/gen/apple/build \
+            "$HOME/Library/Developer/Xcode/DerivedData" \
+            -type d \
+            -name '*.app' \
+            ! -path '*iphonesimulator*' \
+            -print \
+            > "$app_candidates_file" \
+            2>/dev/null || true
 
           app_path=""
-          for candidate in "${app_candidates[@]}"; do
+          while IFS= read -r candidate; do
             info_plist="$candidate/Info.plist"
             if [[ ! -f "$info_plist" ]]; then
               continue
@@ -169,7 +169,7 @@ jobs:
               app_path="$candidate"
               break
             fi
-          done
+          done < "$app_candidates_file"
 
           if [[ -z "$app_path" ]]; then
             echo "::error::No complete unsigned .app bundle was found after tauri ios build."
