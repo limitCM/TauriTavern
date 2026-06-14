@@ -141,16 +141,9 @@ jobs:
             configuration="debug"
           fi
 
-          tauri_status=0
-          pnpm tauri "${args[@]}" -- \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE="" \
-            PROVISIONING_PROFILE_SPECIFIER="" || tauri_status=$?
+          pnpm tauri "${args[@]}"
 
-          app_path="$(
+          mapfile -t app_candidates < <(
             find \
               src-tauri/gen/apple/build \
               "$HOME/Library/Developer/Xcode/DerivedData" \
@@ -158,21 +151,38 @@ jobs:
               -name '*.app' \
               ! -path '*iphonesimulator*' \
               -print \
-              -quit 2>/dev/null || true
-          )"
+              2>/dev/null || true
+          )
+
+          app_path=""
+          for candidate in "${app_candidates[@]}"; do
+            info_plist="$candidate/Info.plist"
+            if [[ ! -f "$info_plist" ]]; then
+              continue
+            fi
+
+            executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$info_plist" 2>/dev/null || true)"
+            if [[ -n "$executable" && -f "$candidate/$executable" ]]; then
+              app_path="$candidate"
+              break
+            fi
+          done
+
           if [[ -z "$app_path" ]]; then
-            echo "::error::No unsigned .app bundle was found after tauri ios build."
+            echo "::error::No complete unsigned .app bundle was found after tauri ios build."
             find src-tauri/gen/apple -maxdepth 6 \( -name '*.app' -o -name '*.xcarchive' -o -name '*.ipa' \) -print || true
             find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 8 \( -name '*.app' -o -name '*.xcarchive' -o -name '*.ipa' \) -print || true
-            if [[ "$tauri_status" -eq 0 ]]; then
-              tauri_status=1
-            fi
-            exit "$tauri_status"
+            exit 1
           fi
 
-          if [[ "$tauri_status" -ne 0 ]]; then
-            echo "::notice::tauri ios build exited with $tauri_status after producing $app_path. Continuing because the workflow packages an unsigned IPA for local sideload signing."
+          app_size_kb="$(du -sk "$app_path" | awk '{print $1}')"
+          if [[ "$app_size_kb" -lt 1024 ]]; then
+            echo "::error::Resolved app bundle is unexpectedly small (${app_size_kb} KiB): $app_path"
+            find "$app_path" -maxdepth 2 -print || true
+            exit 1
           fi
+
+          echo "Resolved unsigned app bundle: $app_path (${app_size_kb} KiB)"
 
           {
             echo "IOS_BUILD_CONFIGURATION=$configuration"
@@ -194,9 +204,24 @@ jobs:
           rm -rf dist-ios/Payload
           mkdir -p dist-ios/Payload
 
-          cp -R "$app_path" dist-ios/Payload/
+          app_name="$(basename "$app_path")"
+          /usr/bin/ditto "$app_path" "dist-ios/Payload/$app_name"
+          app_size_kb="$(du -sk "dist-ios/Payload/$app_name" | awk '{print $1}')"
+          if [[ "$app_size_kb" -lt 1024 ]]; then
+            echo "::error::Copied app bundle is unexpectedly small (${app_size_kb} KiB)."
+            find "dist-ios/Payload/$app_name" -maxdepth 2 -print || true
+            exit 1
+          fi
+
           ipa_name="TauriTavern-iOS-unsigned-${IOS_BUILD_CONFIGURATION}.ipa"
           (cd dist-ios && /usr/bin/zip -qry "$ipa_name" Payload)
+          ipa_size_bytes="$(stat -f%z "dist-ios/$ipa_name")"
+          if [[ "$ipa_size_bytes" -lt 1048576 ]]; then
+            echo "::error::Packaged IPA is unexpectedly small (${ipa_size_bytes} bytes)."
+            /usr/bin/unzip -l "dist-ios/$ipa_name" | sed -n '1,80p' || true
+            exit 1
+          fi
+
           rm -rf dist-ios/Payload
 
           ls -la dist-ios
