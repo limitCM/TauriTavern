@@ -262,7 +262,7 @@ unsafe fn try_begin_continued_processing(
     let mut error: *mut AnyObject = std::ptr::null_mut();
     let submitted: Bool = msg_send![
         &*scheduler,
-        submitTaskRequest: request_ref
+        submitTaskRequest: request_ref,
         error: &mut error
     ];
     release_object(request);
@@ -310,7 +310,7 @@ unsafe fn begin_finite_background_task(
     });
     let task_id: isize = msg_send![
         &*app,
-        beginBackgroundTaskWithName: &*title
+        beginBackgroundTaskWithName: &*title,
         expirationHandler: RcBlock::as_ptr(&expiration_block)
     ];
 
@@ -357,8 +357,8 @@ unsafe fn create_continued_processing_request(
         };
         let request: *mut AnyObject = msg_send![
             allocated,
-            initWithIdentifier: &*identifier
-            title: &*title
+            initWithIdentifier: &*identifier,
+            title: &*title,
             subtitle: &*subtitle
         ];
         if request.is_null() {
@@ -429,8 +429,8 @@ unsafe fn ensure_continued_processing_registered(scheduler: &AnyObject) -> Resul
     let queue: Option<&AnyObject> = None;
     let registered: Bool = msg_send![
         scheduler,
-        registerForTaskWithIdentifier: &*identifier
-        usingQueue: queue
+        registerForTaskWithIdentifier: &*identifier,
+        usingQueue: queue,
         launchHandler: RcBlock::as_ptr(&handler)
     ];
 
