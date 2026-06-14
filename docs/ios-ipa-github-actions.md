@@ -21,6 +21,10 @@ GitHub-hosted macOS runner:
 The workflow also runs automatically for `codex/**` branches when iOS build
 inputs change.
 
+Internally the workflow still invokes `tauri ios build` so Tauri can prepare
+its iOS Xcode build context, then it packages the resulting unsigned `.app`
+bundle into an IPA artifact.
+
 ## Local Sideload Signing
 
 The artifact is intentionally unsigned. iOS still requires every app to be

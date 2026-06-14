@@ -93,28 +93,49 @@ jobs:
         run: |
           set -euo pipefail
 
+          args=(ios build --verbose --ci --export-method debugging)
           configuration="release"
           if [[ "${{ inputs.build_type || 'release' }}" == "debug" ]]; then
+            args+=(--debug)
             configuration="debug"
           fi
 
-          derived_data="$RUNNER_TEMP/tauritavern-ios-derived"
-          xcodebuild \
-            -project src-tauri/gen/apple/tauritavern.xcodeproj \
-            -scheme tauritavern_iOS \
-            -configuration "$configuration" \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$derived_data" \
+          tauri_status=0
+          pnpm tauri "${args[@]}" -- \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            build
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" || tauri_status=$?
+
+          app_path="$(
+            find \
+              src-tauri/gen/apple/build \
+              "$HOME/Library/Developer/Xcode/DerivedData" \
+              -type d \
+              -name '*.app' \
+              ! -path '*iphonesimulator*' \
+              -print \
+              -quit 2>/dev/null || true
+          )"
+          if [[ -z "$app_path" ]]; then
+            echo "::error::No unsigned .app bundle was found after tauri ios build."
+            find src-tauri/gen/apple -maxdepth 6 \( -name '*.app' -o -name '*.xcarchive' -o -name '*.ipa' \) -print || true
+            find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 8 \( -name '*.app' -o -name '*.xcarchive' -o -name '*.ipa' \) -print || true
+            if [[ "$tauri_status" -eq 0 ]]; then
+              tauri_status=1
+            fi
+            exit "$tauri_status"
+          fi
+
+          if [[ "$tauri_status" -ne 0 ]]; then
+            echo "::notice::tauri ios build exited with $tauri_status after producing $app_path. Continuing because the workflow packages an unsigned IPA for local sideload signing."
+          fi
 
           {
             echo "IOS_BUILD_CONFIGURATION=$configuration"
-            echo "IOS_DERIVED_DATA=$derived_data"
+            echo "IOS_APP_PATH=$app_path"
           } >> "$GITHUB_ENV"
 
       - name: Package unsigned IPA for local sideload signing
@@ -122,10 +143,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          app_path="$(find "$IOS_DERIVED_DATA/Build/Products" -type d -path '*iphoneos/*.app' -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            echo "::error::No unsigned .app bundle was found under $IOS_DERIVED_DATA/Build/Products."
-            find "$IOS_DERIVED_DATA/Build/Products" -maxdepth 4 -print || true
+          app_path="${IOS_APP_PATH:-}"
+          if [[ -z "$app_path" || ! -d "$app_path" ]]; then
+            echo "::error::No unsigned .app bundle is available at IOS_APP_PATH=$app_path."
             exit 1
           fi
 
