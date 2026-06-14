@@ -141,7 +141,10 @@ jobs:
             configuration="debug"
           fi
 
+          set +e
           pnpm tauri "${args[@]}"
+          tauri_status=$?
+          set -e
 
           mapfile -t app_candidates < <(
             find \
@@ -180,6 +183,11 @@ jobs:
             echo "::error::Resolved app bundle is unexpectedly small (${app_size_kb} KiB): $app_path"
             find "$app_path" -maxdepth 2 -print || true
             exit 1
+          fi
+
+          if [[ "$tauri_status" -ne 0 ]]; then
+            echo "::warning::tauri ios build exited with status $tauri_status after producing a complete unsigned app bundle."
+            echo "::warning::Continuing with manual IPA packaging; unsigned CI builds can fail during xcodebuild -exportArchive because no teamID is available."
           fi
 
           echo "Resolved unsigned app bundle: $app_path (${app_size_kb} KiB)"
