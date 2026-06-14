@@ -257,7 +257,7 @@ unsafe fn try_begin_continued_processing(
         release_object(request);
         remove_expiration_handler(identifier.as_str());
         return Err("BGContinuedProcessingTaskRequest initializer returned null".to_string());
-    }
+    };
 
     let mut error: *mut AnyObject = std::ptr::null_mut();
     let submitted: Bool = msg_send![
