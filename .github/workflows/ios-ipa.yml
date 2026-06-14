@@ -12,17 +12,8 @@ on:
           - macos-15
           - macos-15-intel
           - macos-latest
-      export_method:
-        description: Xcode/Tauri export method for the IPA.
-        required: true
-        type: choice
-        default: debugging
-        options:
-          - debugging
-          - app-store-connect
-          - release-testing
       build_type:
-        description: Release produces the normal IPA; debug is useful while signing is being sorted out.
+        description: Release produces the normal unsigned IPA; debug is useful while build issues are being sorted out.
         required: true
         type: choice
         default: release
@@ -85,6 +76,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -95,118 +88,61 @@ jobs:
       - name: Check Rust iOS target
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios
 
-      - name: Prepare App Store Connect API key
+      - name: Build unsigned iOS app
         shell: bash
-        env:
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
           set -euo pipefail
 
-          if [[ -z "$APPLE_API_ISSUER" || -z "$APPLE_API_KEY" || -z "$APPLE_API_KEY_P8" ]]; then
-            echo "::notice::APPLE_API_ISSUER, APPLE_API_KEY, and APPLE_API_KEY_P8 were not all provided. The build will rely on manual signing secrets or project-local signing."
-            exit 0
+          configuration="release"
+          if [[ "${{ inputs.build_type || 'release' }}" == "debug" ]]; then
+            configuration="debug"
           fi
 
-          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
-          umask 077
-          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          derived_data="$RUNNER_TEMP/tauritavern-ios-derived"
+          xcodebuild \
+            -project src-tauri/gen/apple/tauritavern.xcodeproj \
+            -scheme tauritavern_iOS \
+            -configuration "$configuration" \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$derived_data" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
 
           {
-            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
-            echo "APPLE_API_KEY=$APPLE_API_KEY"
-            echo "APPLE_API_KEY_PATH=$key_path"
+            echo "IOS_BUILD_CONFIGURATION=$configuration"
+            echo "IOS_DERIVED_DATA=$derived_data"
           } >> "$GITHUB_ENV"
 
-      - name: Install manual signing assets
-        shell: bash
-        env:
-          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "$IOS_CERTIFICATE" || -z "$IOS_CERTIFICATE_PASSWORD" || -z "$IOS_MOBILE_PROVISION" ]]; then
-            echo "::notice::IOS_CERTIFICATE, IOS_CERTIFICATE_PASSWORD, and IOS_MOBILE_PROVISION were not all provided. Skipping manual signing import."
-            exit 0
-          fi
-
-          decode_base64() {
-            if base64 --help 2>&1 | grep -q -- '--decode'; then
-              base64 --decode
-            else
-              base64 -D
-            fi
-          }
-
-          keychain_password="$(uuidgen)"
-          keychain_path="$RUNNER_TEMP/tauritavern-signing.keychain-db"
-          certificate_path="$RUNNER_TEMP/tauritavern-signing.p12"
-          profile_path="$RUNNER_TEMP/tauritavern.mobileprovision"
-          profile_plist="$RUNNER_TEMP/tauritavern.mobileprovision.plist"
-
-          printf '%s' "$IOS_CERTIFICATE" | decode_base64 > "$certificate_path"
-          printf '%s' "$IOS_MOBILE_PROVISION" | decode_base64 > "$profile_path"
-
-          security create-keychain -p "$keychain_password" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$certificate_path" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
-          security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | tr -d '"')
-          security default-keychain -s "$keychain_path"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
-
-          security cms -D -i "$profile_path" > "$profile_plist"
-          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$profile_plist")"
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
-
-          echo "SIGNING_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
-
-      - name: Build IPA
+      - name: Package unsigned IPA for local sideload signing
         shell: bash
         run: |
           set -euo pipefail
 
-          args=(ios build --verbose --ci --export-method "${{ inputs.export_method || 'debugging' }}")
-          if [[ "${{ inputs.build_type || 'release' }}" == "debug" ]]; then
-            args+=(--debug)
-          fi
-
-          pnpm tauri "${args[@]}"
-
-      - name: Collect IPA artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p dist-ios
-          mapfile -t ipa_files < <(find src-tauri/gen/apple/build -type f -name '*.ipa' -print)
-          if [[ "${#ipa_files[@]}" -eq 0 ]]; then
-            echo "::error::No IPA files were found under src-tauri/gen/apple/build."
-            find src-tauri/gen/apple/build -maxdepth 4 -type f -print || true
+          app_path="$(find "$IOS_DERIVED_DATA/Build/Products" -type d -path '*iphoneos/*.app' -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            echo "::error::No unsigned .app bundle was found under $IOS_DERIVED_DATA/Build/Products."
+            find "$IOS_DERIVED_DATA/Build/Products" -maxdepth 4 -print || true
             exit 1
           fi
 
-          for ipa in "${ipa_files[@]}"; do
-            cp "$ipa" "dist-ios/$(basename "$ipa")"
-          done
+          mkdir -p dist-ios
+          rm -rf dist-ios/Payload
+          mkdir -p dist-ios/Payload
+
+          cp -R "$app_path" dist-ios/Payload/
+          ipa_name="TauriTavern-iOS-unsigned-${IOS_BUILD_CONFIGURATION}.ipa"
+          (cd dist-ios && /usr/bin/zip -qry "$ipa_name" Payload)
+          rm -rf dist-ios/Payload
+
           ls -la dist-ios
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TauriTavern-iOS-${{ inputs.export_method || 'debugging' }}-${{ inputs.build_type || 'release' }}
+          name: TauriTavern-iOS-unsigned-${{ inputs.build_type || 'release' }}
           path: dist-ios/*.ipa
           if-no-files-found: error
-
-      - name: Clean manual signing keychain
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -n "${SIGNING_KEYCHAIN_PATH:-}" && -f "$SIGNING_KEYCHAIN_PATH" ]]; then
-            security delete-keychain "$SIGNING_KEYCHAIN_PATH"
-          fi

@@ -136,6 +136,12 @@ struct NSOperatingSystemVersion {
 
 unsafe extern "C" {
     fn sel_registerName(name: *const c_char) -> Sel;
+
+    #[link_name = "objc_msgSend"]
+    fn objc_msgSend_operating_system_version(
+        receiver: *mut AnyObject,
+        selector: Sel,
+    ) -> NSOperatingSystemVersion;
 }
 
 fn cstr(bytes: &'static [u8]) -> &'static CStr {
@@ -237,18 +243,29 @@ unsafe fn try_begin_continued_processing(
     ensure_continued_processing_registered(&scheduler)?;
     insert_expiration_handler(identifier.as_str(), on_expiration);
 
-    let request = create_continued_processing_request(request_class, &identifier, &title, &subtitle)
-        .map_err(|message| {
-            remove_expiration_handler(identifier.as_str());
-            message
-        })?;
     if !object_responds_to_selector(&scheduler, b"submitTaskRequest:error:\0") {
         remove_expiration_handler(identifier.as_str());
         return Err("BGTaskScheduler submitTaskRequest:error: is unavailable".to_string());
     }
 
+    let request = create_continued_processing_request(request_class, &identifier, &title, &subtitle)
+        .map_err(|message| {
+            remove_expiration_handler(identifier.as_str());
+            message
+        })?;
+    let Some(request_ref) = request.as_ref() else {
+        release_object(request);
+        remove_expiration_handler(identifier.as_str());
+        return Err("BGContinuedProcessingTaskRequest initializer returned null".to_string());
+    }
+
     let mut error: *mut AnyObject = std::ptr::null_mut();
-    let submitted: Bool = msg_send![&*scheduler, submitTaskRequest: &*request error: &mut error];
+    let submitted: Bool = msg_send![
+        &*scheduler,
+        submitTaskRequest: request_ref
+        error: &mut error
+    ];
+    release_object(request);
     if !submitted.as_bool() {
         remove_expiration_handler(identifier.as_str());
         return Err(format!(
@@ -325,7 +342,7 @@ unsafe fn create_continued_processing_request(
     identifier: &str,
     title: &str,
     subtitle: &str,
-) -> Result<Retained<AnyObject>, String> {
+) -> Result<*mut AnyObject, String> {
     let identifier = NSString::from_str(identifier);
     let title = NSString::from_str(title);
     let subtitle = NSString::from_str(subtitle);
@@ -334,22 +351,37 @@ unsafe fn create_continued_processing_request(
         request_class,
         b"initWithIdentifier:title:subtitle:\0",
     ) {
-        let request: Retained<AnyObject> = msg_send![request_class, alloc];
-        let request: Retained<AnyObject> = msg_send![
-            &*request,
+        let allocated: *mut AnyObject = msg_send![request_class, alloc];
+        let Some(allocated) = allocated.as_ref() else {
+            return Err("BGContinuedProcessingTaskRequest alloc returned null".to_string());
+        };
+        let request: *mut AnyObject = msg_send![
+            allocated,
             initWithIdentifier: &*identifier
             title: &*title
             subtitle: &*subtitle
         ];
+        if request.is_null() {
+            return Err(
+                "BGContinuedProcessingTaskRequest title initializer returned null".to_string(),
+            );
+        }
         return Ok(request);
     }
 
     if class_instances_respond_to_selector(request_class, b"initWithIdentifier:\0") {
-        let request: Retained<AnyObject> = msg_send![request_class, alloc];
-        let request: Retained<AnyObject> =
-            msg_send![&*request, initWithIdentifier: &*identifier];
-        set_string_property_if_available(&*request, b"setTitle:\0", &title);
-        set_string_property_if_available(&*request, b"setSubtitle:\0", &subtitle);
+        let allocated: *mut AnyObject = msg_send![request_class, alloc];
+        let Some(allocated) = allocated.as_ref() else {
+            return Err("BGContinuedProcessingTaskRequest alloc returned null".to_string());
+        };
+        let request: *mut AnyObject = msg_send![allocated, initWithIdentifier: &*identifier];
+        let Some(request_ref) = request.as_ref() else {
+            return Err(
+                "BGContinuedProcessingTaskRequest identifier initializer returned null".to_string(),
+            );
+        };
+        set_string_property_if_available(request_ref, b"setTitle:\0", &title);
+        set_string_property_if_available(request_ref, b"setSubtitle:\0", &subtitle);
         return Ok(request);
     }
 
@@ -560,7 +592,11 @@ unsafe fn shared_application() -> Result<Retained<AnyObject>, String> {
 unsafe fn operating_system_version() -> Option<NSOperatingSystemVersion> {
     let process_info_class = objc_class(b"NSProcessInfo\0")?;
     let process_info: Retained<AnyObject> = msg_send![process_info_class, processInfo];
-    Some(msg_send![&*process_info, operatingSystemVersion])
+    let process_info = (&*process_info as *const AnyObject).cast_mut();
+    Some(objc_msgSend_operating_system_version(
+        process_info,
+        selector(b"operatingSystemVersion\0"),
+    ))
 }
 
 unsafe fn system_version_string() -> String {

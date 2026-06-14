@@ -191,7 +191,7 @@ impl AgentRuntimeService {
         let active_handle = Arc::new(super::scheduler::ActiveRunHandle::new(
             self,
             run_id.clone(),
-            cancel_sender,
+            cancel_sender.clone(),
         ));
         self.active_runs
             .write()

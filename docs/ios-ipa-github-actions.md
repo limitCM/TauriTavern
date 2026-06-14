@@ -1,6 +1,6 @@
 # GitHub Actions iOS IPA Build
 
-This repository includes a manual workflow for building an iOS IPA on a
+This repository includes a workflow for building an unsigned iOS IPA on a
 GitHub-hosted macOS runner:
 
 ```text
@@ -15,46 +15,21 @@ GitHub-hosted macOS runner:
 4. Click **Run workflow**.
 5. Keep the defaults for a first test:
    - `runner`: `macos-15`
-   - `export_method`: `debugging`
    - `build_type`: `release`
 6. Download the generated IPA from the workflow run artifacts.
 
-## Signing Secrets
+The workflow also runs automatically for `codex/**` branches when iOS build
+inputs change.
 
-Tauri iOS builds still need Apple signing. Use either automatic signing through
-App Store Connect API credentials or manual signing assets.
+## Local Sideload Signing
 
-For automatic signing, add these repository secrets:
+The artifact is intentionally unsigned. iOS still requires every app to be
+signed before it can run on a physical iPhone, but that signing can happen on
+your own machine through a sideloading tool instead of inside GitHub Actions.
 
-```text
-APPLE_API_ISSUER
-APPLE_API_KEY
-APPLE_API_KEY_P8
-```
-
-`APPLE_API_KEY_P8` is the full text content of the downloaded
-`AuthKey_<key id>.p8` file. The workflow writes it to a temporary file and
-exports `APPLE_API_KEY_PATH` for the Tauri CLI.
-
-For manual signing, add these repository secrets instead:
-
-```text
-IOS_CERTIFICATE
-IOS_CERTIFICATE_PASSWORD
-IOS_MOBILE_PROVISION
-```
-
-`IOS_CERTIFICATE` and `IOS_MOBILE_PROVISION` should be base64-encoded before
-being stored as GitHub Secrets. When these three secrets are present, the
-workflow imports the certificate into a temporary keychain and installs the
-provisioning profile for the build.
-
-## Export Method
-
-Use `debugging` for the first side-load or development build. Use
-`app-store-connect` when preparing a TestFlight/App Store style IPA. Use
-`release-testing` when the provisioning profile includes the target test
-device UDIDs.
+Use the downloaded unsigned IPA with a local re-signing installer such as
+Sideloadly, AltStore, SideStore, or another tool that can sign an IPA using
+your local Apple ID or device-specific signing setup.
 
 The project already sets the bundle identifier and Apple development team in:
 
@@ -70,9 +45,9 @@ update those files before running the workflow.
 
 - The local checkout still points at `Darkatse/TauriTavern`; push these workflow
   files to `limitCM/TauriTavern` before running Actions on the fork.
-- Missing or mismatched Apple signing credentials usually fail at the Xcode
-  archive/export step.
-- A `debugging` or `release-testing` IPA only installs on devices covered by
-  the matching provisioning profile.
-- `app-store-connect` builds require a valid App Store Connect app record and
-  matching bundle identifier.
+- The IPA downloaded from Actions is not directly installable until a local
+  sideloading tool signs it.
+- Free Apple ID sideloading usually has app count and refresh limits enforced
+  by Apple's services.
+- If the local signer changes the bundle identifier, make sure it stays
+  consistent with the app data you expect to reuse.
