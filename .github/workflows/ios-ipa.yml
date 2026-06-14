@@ -92,6 +92,9 @@ jobs:
       - name: Build frontend assets
         run: pnpm run web:build
 
+      - name: Check Rust iOS target
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios
+
       - name: Prepare App Store Connect API key
         shell: bash
         env:
