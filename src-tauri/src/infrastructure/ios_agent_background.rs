@@ -123,6 +123,10 @@ impl IosAgentBackgroundActivity {
 }
 
 pub fn prepare_agent_background_handlers() -> Result<(), String> {
+    if !continued_processing_enabled() {
+        return Ok(());
+    }
+
     unsafe { prepare_agent_background_handlers_on_main_thread() }
 }
 
@@ -223,6 +227,13 @@ unsafe fn try_begin_continued_processing(
     on_expiration: ExpirationHandler,
     system_version: String,
 ) -> Result<(IosAgentBackgroundActivity, IosAgentBackgroundStartReport), String> {
+    if !continued_processing_enabled() {
+        return Err(
+            "BGContinuedProcessingTask is disabled for this build; using finite background task"
+                .to_string(),
+        );
+    }
+
     let version = operating_system_version()
         .ok_or_else(|| "NSProcessInfo operatingSystemVersion is unavailable".to_string())?;
     if version.major_version < 26 {
@@ -650,4 +661,8 @@ fn continued_processing_identifier(run_id: &str) -> String {
             suffix
         }
     )
+}
+
+fn continued_processing_enabled() -> bool {
+    cfg!(feature = "ios-bg-continued-processing")
 }

@@ -96,6 +96,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 portable = []
+ios-bg-continued-processing = []
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

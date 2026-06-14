@@ -7,7 +7,9 @@ running on iOS.
 
 When an Agent run starts, the runtime attempts this order:
 
-1. On iOS 26 or newer, submit a `BGContinuedProcessingTaskRequest` for the run.
+1. On iOS 26 or newer signed builds that enable the
+   `ios-bg-continued-processing` Cargo feature, submit a
+   `BGContinuedProcessingTaskRequest` for the run.
 2. If continued processing is unavailable or submission fails, fall back to
    `UIApplication.beginBackgroundTask`.
 3. If both mechanisms are unavailable, continue the Agent run without a native
@@ -17,8 +19,13 @@ The continued-processing bridge uses dynamic Objective-C lookup for the iOS 26
 classes and selectors. This keeps older SDK/device paths on the fallback route
 instead of requiring compile-time iOS 26 symbols.
 
-The continued-processing launch handler is registered during Tauri app setup.
-Agent runs only submit per-run task requests after they start.
+Unsigned/sideload smoke-test builds keep continued processing disabled by
+default because `BGTaskScheduler` can require capabilities that local resigning
+tools do not provide. Those builds use the finite background-task fallback.
+
+The continued-processing launch handler is registered during Tauri app setup
+only when the Cargo feature is enabled. Agent runs only submit per-run task
+requests after they start.
 
 ## Progress And Cancellation
 
@@ -90,5 +97,6 @@ Useful checks after pushing this branch to GitHub:
 3. Install the IPA on an iOS device.
 4. Start an Agent run and inspect run events for
    `ios_agent_background_activity_started`.
-5. On iOS 26+, confirm the mode is `continued_processing`; on older iOS,
-   confirm the fallback mode is `finite_background_task`.
+5. On unsigned/sideload builds, confirm the fallback mode is
+   `finite_background_task`. On signed iOS 26+ builds with
+   `ios-bg-continued-processing`, confirm the mode is `continued_processing`.

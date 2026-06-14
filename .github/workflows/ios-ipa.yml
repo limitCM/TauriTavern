@@ -13,10 +13,10 @@ on:
           - macos-15-intel
           - macos-latest
       build_type:
-        description: Release produces the normal unsigned IPA; debug is useful while build issues are being sorted out.
+        description: Debug builds faster for sideload smoke tests; choose release for the normal unsigned IPA.
         required: true
         type: choice
-        default: release
+        default: debug
         options:
           - release
           - debug
@@ -85,9 +85,6 @@ jobs:
       - name: Build frontend assets
         run: pnpm run web:build
 
-      - name: Check Rust iOS target
-        run: cargo check --locked --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios
-
       - name: Disable Xcode signing for unsigned artifact
         shell: bash
         run: |
@@ -136,7 +133,7 @@ jobs:
 
           args=(ios build --verbose --ci --export-method debugging)
           configuration="release"
-          if [[ "${{ inputs.build_type || 'release' }}" == "debug" ]]; then
+          if [[ "${{ inputs.build_type || 'debug' }}" == "debug" ]]; then
             args+=(--debug)
             configuration="debug"
           fi
@@ -237,6 +234,6 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TauriTavern-iOS-unsigned-${{ inputs.build_type || 'release' }}
+          name: TauriTavern-iOS-unsigned-${{ inputs.build_type || 'debug' }}
           path: dist-ios/*.ipa
           if-no-files-found: error

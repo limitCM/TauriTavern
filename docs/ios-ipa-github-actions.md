@@ -15,8 +15,12 @@ GitHub-hosted macOS runner:
 4. Click **Run workflow**.
 5. Keep the defaults for a first test:
    - `runner`: `macos-15`
-   - `build_type`: `release`
+   - `build_type`: `debug`
 6. Download the generated IPA from the workflow run artifacts.
+
+Use `debug` while checking install/startup issues because it builds faster.
+After the app launches correctly, re-run the workflow with `build_type:
+release` for the normal optimized artifact.
 
 The workflow also runs automatically for `codex/**` branches when iOS build
 inputs change.
