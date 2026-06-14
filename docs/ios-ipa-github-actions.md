@@ -23,7 +23,8 @@ inputs change.
 
 Internally the workflow still invokes `tauri ios build` so Tauri can prepare
 its iOS Xcode build context, then it packages the resulting unsigned `.app`
-bundle into an IPA artifact.
+bundle into an IPA artifact. The macOS runner temporarily disables Xcode code
+signing for this artifact build only.
 
 ## Local Sideload Signing
 

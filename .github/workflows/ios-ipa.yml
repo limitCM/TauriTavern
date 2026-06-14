@@ -88,6 +88,47 @@ jobs:
       - name: Check Rust iOS target
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios
 
+      - name: Disable Xcode signing for unsigned artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unsigned_xcconfig="$RUNNER_TEMP/unsigned-ios.xcconfig"
+          cat > "$unsigned_xcconfig" <<'EOF'
+          CODE_SIGNING_ALLOWED = NO
+          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGN_IDENTITY =
+          CODE_SIGN_STYLE = Manual
+          DEVELOPMENT_TEAM =
+          PROVISIONING_PROFILE =
+          PROVISIONING_PROFILE_SPECIFIER =
+          EOF
+          echo "XCODE_XCCONFIG_FILE=$unsigned_xcconfig" >> "$GITHUB_ENV"
+
+          /usr/bin/python3 - <<'PY'
+          from pathlib import Path
+
+          project = Path("src-tauri/gen/apple/tauritavern.xcodeproj/project.pbxproj")
+          text = project.read_text()
+          original = text
+          text = text.replace(
+              'CODE_SIGN_IDENTITY = "iPhone Developer";',
+              'CODE_SIGN_IDENTITY = "";\n'
+              '\t\t\t\tCODE_SIGNING_ALLOWED = NO;\n'
+              '\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n'
+              '\t\t\t\tCODE_SIGN_STYLE = Manual;',
+          )
+          text = text.replace(
+              'DEVELOPMENT_TEAM = "Y82Q3U47CB";',
+              'DEVELOPMENT_TEAM = "";\n'
+              '\t\t\t\tPROVISIONING_PROFILE = "";\n'
+              '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "";',
+          )
+          if text == original:
+              raise SystemExit("No Xcode signing settings were patched")
+          project.write_text(text)
+          PY
+
       - name: Build unsigned iOS app
         shell: bash
         run: |
