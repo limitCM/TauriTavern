@@ -29,6 +29,18 @@ on:
         options:
           - release
           - debug
+  push:
+    branches:
+      - codex/**
+    paths:
+      - .github/workflows/ios-ipa.yml
+      - package.json
+      - pnpm-lock.yaml
+      - webpack.config.js
+      - src/**
+      - src-tauri/**
+      - docs/ios-agent-background.md
+      - docs/ios-ipa-github-actions.md
 
 concurrency:
   group: ios-ipa-${{ github.ref }}
@@ -39,7 +51,7 @@ permissions:
 
 jobs:
   build-ios-ipa:
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner || 'macos-15' }}
     timeout-minutes: 90
 
     steps:
@@ -159,8 +171,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          args=(ios build --verbose --ci --export-method "${{ inputs.export_method }}")
-          if [[ "${{ inputs.build_type }}" == "debug" ]]; then
+          args=(ios build --verbose --ci --export-method "${{ inputs.export_method || 'debugging' }}")
+          if [[ "${{ inputs.build_type || 'release' }}" == "debug" ]]; then
             args+=(--debug)
           fi
 
@@ -187,7 +199,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TauriTavern-iOS-${{ inputs.export_method }}-${{ inputs.build_type }}
+          name: TauriTavern-iOS-${{ inputs.export_method || 'debugging' }}-${{ inputs.build_type || 'release' }}
           path: dist-ios/*.ipa
           if-no-files-found: error
 
