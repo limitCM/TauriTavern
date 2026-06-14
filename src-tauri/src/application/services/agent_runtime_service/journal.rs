@@ -25,6 +25,7 @@ impl AgentRuntimeService {
             json!({ "status": status }),
         )
         .await?;
+        self.report_background_progress(run_id, status).await;
         Ok(run)
     }
 

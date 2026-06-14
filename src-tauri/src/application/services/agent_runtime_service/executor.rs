@@ -43,6 +43,7 @@ impl AgentRuntimeService {
 
         self.finalize_agent_loop_run_result(&run_id, &commit_ledger, &result)
             .await;
+        self.finish_background_activity(&run_id, result.is_ok()).await;
         self.close_model_session_after_run(run_id);
     }
 
@@ -139,6 +140,7 @@ impl AgentRuntimeService {
             .await;
         self.finalize_agent_loop_run_result(run_id, &commit_ledger, &result)
             .await;
+        self.finish_background_activity(run_id, result.is_ok()).await;
         self.close_model_session_after_run(run_id.to_string());
         result
     }

@@ -197,6 +197,8 @@ impl AgentRuntimeService {
             .write()
             .await
             .insert(run_id.clone(), active_handle);
+        self.begin_background_activity_for_run(&run, cancel_sender.clone())
+            .await;
 
         let service = self.clone();
         let background_run_id = run_id.clone();

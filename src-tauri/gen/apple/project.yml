@@ -39,6 +39,8 @@ targets:
       path: tauritavern_iOS/Info.plist
       properties:
         LSRequiresIPhoneOS: true
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.tauritavern.client.agent.continued.*
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:
@@ -72,6 +74,7 @@ targets:
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
+      - sdk: BackgroundTasks.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework

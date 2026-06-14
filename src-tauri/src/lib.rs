@@ -89,6 +89,16 @@ pub fn run() {
             let app_handle = app.handle().clone();
             logger::bind_app_handle(app_handle.clone());
 
+            #[cfg(target_os = "ios")]
+            if let Err(error) =
+                crate::infrastructure::ios_agent_background::prepare_agent_background_handlers()
+            {
+                tracing::warn!(
+                    "Failed to prepare iOS Agent continued-processing handler: {}",
+                    error
+                );
+            }
+
             // Resolve and publish runtime paths before any managed service is created so every
             // host-facing subsystem reads from the same directory layout.
             let runtime_paths = resolve_runtime_paths(&app_handle)?;

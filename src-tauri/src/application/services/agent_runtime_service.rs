@@ -26,6 +26,7 @@ use crate::domain::repositories::group_chat_repository::GroupChatRepository;
 use crate::domain::repositories::workspace_repository::WorkspaceRepository;
 
 mod artifacts;
+mod background_activity;
 mod commit;
 mod commit_ledger;
 mod delegation;
@@ -50,6 +51,7 @@ mod tool_execution;
 mod tests;
 
 use scheduler::ActiveRunHandle;
+use background_activity::AgentBackgroundActivity;
 
 pub(super) type AgentCancelReceiver = watch::Receiver<bool>;
 
@@ -94,7 +96,9 @@ pub struct AgentRuntimeService {
     skill_service: Arc<SkillService>,
     tool_registry: BuiltinAgentToolRegistry,
     tool_dispatcher: AgentToolDispatcher,
+    app_handle: Option<tauri::AppHandle>,
     active_runs: RwLock<HashMap<String, Arc<ActiveRunHandle>>>,
+    background_activities: RwLock<HashMap<String, AgentBackgroundActivity>>,
     active_chat_commits: RwLock<HashMap<String, PendingHostChatCommit>>,
     active_prompt_assemblies: RwLock<HashMap<String, PendingHostPromptAssembly>>,
     active_persistent_state_metadata_updates:
@@ -127,6 +131,7 @@ impl AgentRuntimeService {
             profile_service,
             llm_connection_service,
             None,
+            None,
         )
     }
 
@@ -155,6 +160,37 @@ impl AgentRuntimeService {
             profile_service,
             llm_connection_service,
             Some(prompt_assembly_service),
+            None,
+        )
+    }
+
+    pub fn new_with_prompt_assembly_service_and_app_handle(
+        run_repository: Arc<dyn AgentRunRepository>,
+        invocation_repository: Arc<dyn AgentInvocationRepository>,
+        workspace_repository: Arc<dyn WorkspaceRepository>,
+        checkpoint_repository: Arc<dyn CheckpointRepository>,
+        chat_repository: Arc<dyn ChatRepository>,
+        group_chat_repository: Arc<dyn GroupChatRepository>,
+        skill_service: Arc<SkillService>,
+        model_gateway: Arc<dyn AgentModelGateway>,
+        profile_service: Arc<AgentProfileService>,
+        llm_connection_service: Arc<LlmConnectionService>,
+        prompt_assembly_service: Arc<PromptAssemblyService>,
+        app_handle: tauri::AppHandle,
+    ) -> Self {
+        Self::new_internal(
+            run_repository,
+            invocation_repository,
+            workspace_repository,
+            checkpoint_repository,
+            chat_repository,
+            group_chat_repository,
+            skill_service,
+            model_gateway,
+            profile_service,
+            llm_connection_service,
+            Some(prompt_assembly_service),
+            Some(app_handle),
         )
     }
 
@@ -170,6 +206,7 @@ impl AgentRuntimeService {
         profile_service: Arc<AgentProfileService>,
         llm_connection_service: Arc<LlmConnectionService>,
         prompt_assembly_service: Option<Arc<PromptAssemblyService>>,
+        app_handle: Option<tauri::AppHandle>,
     ) -> Self {
         let tool_registry = BuiltinAgentToolRegistry::phase2c();
         let tool_dispatcher = AgentToolDispatcher::new(
@@ -190,10 +227,12 @@ impl AgentRuntimeService {
             profile_service,
             llm_connection_service,
             prompt_assembly_service,
+            app_handle,
             skill_service,
             tool_registry,
             tool_dispatcher,
             active_runs: RwLock::new(HashMap::new()),
+            background_activities: RwLock::new(HashMap::new()),
             active_chat_commits: RwLock::new(HashMap::new()),
             active_prompt_assemblies: RwLock::new(HashMap::new()),
             active_persistent_state_metadata_updates: RwLock::new(HashMap::new()),

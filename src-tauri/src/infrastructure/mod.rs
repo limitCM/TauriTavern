@@ -9,6 +9,8 @@ pub mod github;
 pub mod http_client;
 pub mod http_client_pool;
 #[cfg(target_os = "ios")]
+pub mod ios_agent_background;
+#[cfg(target_os = "ios")]
 pub mod ios_document_picker;
 pub mod ios_policy_cache;
 #[cfg(target_os = "ios")]

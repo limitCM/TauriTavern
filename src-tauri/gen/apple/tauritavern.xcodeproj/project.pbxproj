@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		063B64597F8EF4EA70421046 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7E95601643FFD81FE4E34D73 /* MetalKit.framework */; };
+		1E3A6F7B8C9D4012A3B4C5D6 /* BackgroundTasks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8B7C6D5E4F3210A1B2C3D4 /* BackgroundTasks.framework */; };
 		32278158C8E0B56B31176DCD /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 719BCD1D1A4D1A650B518998 /* Security.framework */; };
 		6900483911F8D8AC6E4D51A0 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2FF0DF96F4A47B439E9A9CFF /* Metal.framework */; };
 		71B4211C46C83E78E51CC070 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02727B28214B0D763A58CEB7 /* QuartzCore.framework */; };
@@ -24,6 +25,7 @@
 /* Begin PBXFileReference section */
 		01C695690B7213E87EE96492 /* windowed_payload.rs */ = {isa = PBXFileReference; path = windowed_payload.rs; sourceTree = "<group>"; };
 		02727B28214B0D763A58CEB7 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		9A8B7C6D5E4F3210A1B2C3D4 /* BackgroundTasks.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundTasks.framework; path = System/Library/Frameworks/BackgroundTasks.framework; sourceTree = SDKROOT; };
 		037C9BB6F2EF64CFD28978D1 /* user_commands.rs */ = {isa = PBXFileReference; path = user_commands.rs; sourceTree = "<group>"; };
 		03EACBF72DE34B92E8A84FB1 /* openai.rs */ = {isa = PBXFileReference; path = openai.rs; sourceTree = "<group>"; };
 		046624CBBFE5B2C5A790D4CC /* chat_format_importers.rs */ = {isa = PBXFileReference; path = chat_format_importers.rs; sourceTree = "<group>"; };
@@ -254,6 +256,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA3812A8AB49B932DA7D1FE2 /* libapp.a in Frameworks */,
+				1E3A6F7B8C9D4012A3B4C5D6 /* BackgroundTasks.framework in Frameworks */,
 				73AAC2338D41B1D217EAFCBF /* CoreGraphics.framework in Frameworks */,
 				6900483911F8D8AC6E4D51A0 /* Metal.framework in Frameworks */,
 				063B64597F8EF4EA70421046 /* MetalKit.framework in Frameworks */,
@@ -534,6 +537,7 @@
 		B557D66031B8D0E2ABBA3E8D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				9A8B7C6D5E4F3210A1B2C3D4 /* BackgroundTasks.framework */,
 				0A8AEAB7AC8823A5825440B5 /* CoreGraphics.framework */,
 				C11991D4BBA9ED50B2CBD16A /* libapp.a */,
 				2FF0DF96F4A47B439E9A9CFF /* Metal.framework */,
